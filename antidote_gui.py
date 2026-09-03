@@ -1,41 +1,3 @@
-#!/usr/bin/env python3
-"""
-antidote_gui.py — a dark-themed gallery wrapper around `decayfmt`.
-
-Folder layout (created next to this script on first run):
-
-    put files here/   <- drop your .idcyX / .tdcyX masters here.
-                          Each file found is made read-only, so it can
-                          never be corrupted directly, even by accident.
-    gallery/           <- every time you "open" a file, a brand-new copy
-                          is made here and THAT copy is handed to
-                          `decayfmt open`. Older copies in this folder
-                          are never touched again.
-
-Memory: how many times each master has been opened, and the list/history
-of every copy ever made, is stored in
-    gallery/.antidote_state.json
-and reloaded every time you start the app, so counts and history survive
-restarts.
-
-Requires: Python 3 with tkinter (stdlib), and the `decayfmt` binary on
-PATH (cargo install decayfmt).
-
-Cross-platform notes:
-  - Folder/file paths use pathlib throughout, so the same code creates
-    "put files here" / "gallery" correctly on Windows, macOS, and any
-    Linux distro without changes.
-  - Read-only protection uses os.chmod, which works on all three; on
-    Windows it toggles the file's read-only attribute, on POSIX systems
-    it clears the write bits.
-  - Finding the decayfmt binary uses shutil.which(), which on Windows
-    automatically checks PATHEXT (so "decayfmt" finds "decayfmt.exe")
-    and on POSIX checks the executable bit.
-  - tkinter ships with the official Python installer on Windows and
-    macOS. Some Linux distros split it into a separate package — if
-    it's missing, this script prints the right install command for
-    your distro instead of crashing with a bare import error.
-"""
 import json
 import os
 import platform
@@ -84,7 +46,6 @@ except ImportError:
     )
     sys.exit(1)
 
-# ---------------------------------------------------------------- paths ---
 
 BASE_DIR = Path(sys.argv[0]).resolve().parent if getattr(sys, "frozen", False) else Path(__file__).resolve().parent
 SOURCE_DIR = BASE_DIR / "put files here"
@@ -93,7 +54,6 @@ STATE_FILE = GALLERY_DIR / ".antidote_state.json"
 
 DECAY_EXTS = (".idcy", ".tdcy")
 
-# --------------------------------------------------------------- theme ----
 
 BG = "#111013"
 PANEL = "#19181c"
@@ -104,9 +64,6 @@ ACCENT = "#e0a458"
 ACCENT_DIM = "#8a6a3f"
 DANGER = "#c96a5a"
 
-# Font families to try, in order, per role. Falls back to Tk's own
-# guaranteed-present named fonts (TkDefaultFont / TkFixedFont) so the UI
-# never errors out on a distro/OS that lacks all of the preferred fonts.
 UI_FONT_CANDIDATES = [
     "Segoe UI", "SF Pro Text", "Helvetica Neue", "Ubuntu", "Cantarell",
     "Noto Sans", "DejaVu Sans",
@@ -118,10 +75,6 @@ MONO_FONT_CANDIDATES = [
 
 
 def pick_font(root: tk.Tk, candidates, size: int, weight: str = "normal", fallback: str = "TkDefaultFont"):
-    """Return a font spec usable by ttk styles, preferring an installed
-    candidate family and otherwise falling back to a Tk-guaranteed named
-    font so this works identically on Windows, macOS, and any Linux
-    desktop regardless of which fonts happen to be installed."""
     try:
         available = set(tkfont.families(root))
     except tk.TclError:
@@ -150,8 +103,6 @@ def make_writable(p: Path) -> None:
     os.chmod(p, mode | stat.S_IWUSR)
 
 
-# --------------------------------------------------------------- state ----
-
 def load_state() -> dict:
     if STATE_FILE.exists():
         try:
@@ -168,8 +119,6 @@ def save_state(state: dict) -> None:
     tmp.replace(STATE_FILE)
 
 
-# ---------------------------------------------------------------- app -----
-
 class AntidoteApp:
     def __init__(self, root: tk.Tk):
         self.root = root
@@ -183,7 +132,6 @@ class AntidoteApp:
         self._build_ui()
         self.rescan(initial=True)
 
-    # -- ui construction ---------------------------------------------
 
     def _setup_style(self):
         self.root.title("decayfmt — antidote gallery")
@@ -192,9 +140,6 @@ class AntidoteApp:
         self.root.minsize(700, 440)
 
         style = ttk.Style(self.root)
-        # "clam" renders consistently (and lets bg/fg colors apply) on
-        # Windows, macOS, and Linux, unlike the platform-native themes
-        # which often ignore custom colors on some of those OSes.
         try:
             style.theme_use("clam")
         except tk.TclError:
@@ -255,7 +200,6 @@ class AntidoteApp:
         body.columnconfigure(1, weight=1)
         body.rowconfigure(0, weight=1)
 
-        # left: masters list
         left = tk.Frame(body, bg=PANEL, highlightthickness=0)
         left.grid(row=0, column=0, sticky="nsew", padx=(0, 8))
         ttk.Label(left, text="MASTERS  ·  never opened, never corrupted", style="PanelMuted.TLabel").pack(
@@ -276,7 +220,6 @@ class AntidoteApp:
         self.master_list.bind("<<ListboxSelect>>", lambda e: self.refresh_history())
         self.master_list.bind("<Double-Button-1>", lambda e: self.open_selected())
 
-        # right: gallery history for selected master
         right = tk.Frame(body, bg=PANEL, highlightthickness=0)
         right.grid(row=0, column=1, sticky="nsew", padx=(8, 0))
         ttk.Label(right, text="GALLERY  ·  disposable copies, most recent first", style="PanelMuted.TLabel").pack(
@@ -295,7 +238,6 @@ class AntidoteApp:
         )
         self.history_list.pack(fill="both", expand=True, padx=10, pady=(0, 10))
 
-        # footer
         footer = ttk.Frame(self.root, style="TFrame")
         footer.pack(fill="x", padx=18, pady=(6, 16))
 
@@ -310,7 +252,6 @@ class AntidoteApp:
         )
         self.open_btn.pack(side="right")
 
-    # -- data / actions -------------------------------------------------
 
     def rescan(self, initial: bool = False):
         found = sorted(
@@ -401,7 +342,13 @@ class AntidoteApp:
             shutil.copy2(master_path, copy_path)
             make_writable(copy_path)
 
-            proc = subprocess.run(["decayfmt", "open", str(copy_path)], capture_output=True, text=True)
+            proc = subprocess.run(
+                ["decayfmt", "open", str(copy_path)],
+                capture_output=True,
+                text=True,
+                encoding="utf-8",
+                errors="replace",
+            )
 
             self.state[name]["opens"] = n
             self.state[name]["copies"].append(
@@ -415,7 +362,7 @@ class AntidoteApp:
                 self.root.after(0, lambda: self.status_var.set(f"decayfmt reported an error on {copy_name}."))
             else:
                 self.root.after(0, lambda: self.status_var.set(f"opened {copy_name} — master untouched."))
-        except Exception as exc:  # noqa: BLE001
+        except Exception as exc:
             self.root.after(0, lambda: messagebox.showerror("antidote", str(exc)))
         finally:
             self.root.after(0, self._open_done)
@@ -427,9 +374,6 @@ class AntidoteApp:
 
 
 def main():
-    # Works unchanged on Windows, macOS, and Linux — pathlib resolves the
-    # right separators and mkdir(parents=True, exist_ok=True) is a no-op
-    # if the folders already exist.
     SOURCE_DIR.mkdir(parents=True, exist_ok=True)
     GALLERY_DIR.mkdir(parents=True, exist_ok=True)
     try:

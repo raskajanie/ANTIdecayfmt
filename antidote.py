@@ -1,33 +1,3 @@
-#!/usr/bin/env python3
-"""
-antidote.py — a backup-based wrapper around `decayfmt`.
-
-decayfmt's own README says it plainly: it is a social contract, not
-security. Anyone with a backup can copy the file before opening it and
-keep the original forever. This tool automates exactly that:
-
-  - You "add" a .idcyX / .tdcyX file once. It's copied into a vault and
-    marked read-only, so even a stray `decayfmt open` on the vault copy
-    itself fails immediately (decayfmt refuses to touch read-only files).
-  - Every time you want to "view" it, antidote makes a fresh disposable
-    copy (same filename, so decayfmt still reads the right `x` from the
-    name) and runs `decayfmt open` on THAT copy. The copy decays. The
-    vault master never does.
-  - You can view it as many times as you want; every view starts from
-    the pristine original.
-
-Requires the `decayfmt` binary to be on PATH (cargo install decayfmt).
-
-Usage:
-    antidote.py add   <file> [--name NAME]      # store a pristine master
-    antidote.py list                            # show what's in the vault
-    antidote.py open  <name> [--keep]           # view once (disposable copy)
-    antidote.py export <name> <dest>            # get a fresh untouched copy, no viewing
-    antidote.py forget <name>                   # remove a master from the vault
-
-Vault location defaults to ~/.antidote_vault (override with --vault-dir
-or the ANTIDOTE_VAULT env var).
-"""
 import argparse
 import os
 import shutil
@@ -51,7 +21,6 @@ def masters_dir(vault_dir: Path) -> Path:
 
 
 def make_read_only(path: Path) -> None:
-    # Remove all write bits for owner/group/other.
     mode = os.stat(path).st_mode
     os.chmod(path, mode & ~stat.S_IWUSR & ~stat.S_IWGRP & ~stat.S_IWOTH)
 
@@ -108,7 +77,10 @@ def cmd_open(args, vault_dir: Path) -> int:
         return 1
 
     if shutil.which("decayfmt") is None:
-        print("error: 'decayfmt' binary not found on PATH (cargo install decayfmt).", file=sys.stderr)
+        print("error: 'decayfmt' binary not found on PATH.", file=sys.stderr)
+        print("  install: cargo install decayfmt", file=sys.stderr)
+        if os.name == "nt":
+            print("  Windows: ensure %USERPROFILE%\\.cargo\\bin is on PATH, then open a new terminal.", file=sys.stderr)
         return 1
 
     if args.keep:
@@ -130,7 +102,6 @@ def cmd_open(args, vault_dir: Path) -> int:
         shutil.copy2(master, copy_path)
         make_writable(copy_path)
         rc = _run_decayfmt_open(copy_path)
-        # copy_path is deleted with the tempdir; the vault master is untouched
         return rc
 
 
